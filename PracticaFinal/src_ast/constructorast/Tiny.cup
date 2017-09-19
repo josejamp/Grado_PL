@@ -1,0 +1,185 @@
+package constructorast;
+
+import java_cup.runtime.*;
+import alex.AnalizadorLexicoTiny;
+import alex.UnidadLexica;
+import errors.GestionErroresTiny;
+import ast.*;
+import ast.declaraciones.*;
+import ast.designadores.*;
+import ast.expresiones.*;
+import ast.instrucciones.*;
+
+scan with {: return getScanner().next_token(); :};
+action code {:
+   private ASTiny as = new ASTiny();
+:};
+parser code {: 
+   private GestionErroresTiny errores;
+   public void syntax_error(Symbol unidadLexica) {
+     errores.errorSintactico((UnidadLexica)unidadLexica);
+   }
+    public int row() {
+      return ((AnalizadorLexicoTiny)getScanner()).fila();
+  }
+:};
+init with {: 
+   errores = new GestionErroresTiny();
+   AnalizadorLexicoTiny alex = (AnalizadorLexicoTiny)getScanner();
+   alex.fijaGestionErrores(errores);
+:};
+
+
+terminal    String ID, ENTERO, NUM_REAL;
+terminal    SEPARADOR_SECCION, SEPARADOR_INST, TIPO, INT, REAL, REC, ENDREC, POINTER, OBJECT, 
+			EXTENDS, ENDOBJECT, FUN, END, METHOD, PAR_AP, PAR_CIERRE, COR_AP, 
+			COR_CIERRE, RETURNS, COMA, THIS, SUPER, REFERENCIA, PUNTO, ACENTO, MENOR, MENOR_IGUAL, 
+			MAYOR, MAYOR_IGUAL, IGUAL, DISTINTO, OR, SUMA, RESTA, MULT, DIV, MODULO, AND, CAST_INT, 
+			CAST_REAL, NOT, ASIGNACION, IN, OUT, ALLOC, FREE, IF, ELSE, ENDIF, ELSIF, THEN, WHILE, 
+			DO, ENDWHILE, RETURN, NULL;
+
+non terminal    Prog PROGRAMA; 
+non terminal	Decs DECLARACIONES, DECLARACIONESp; 
+non terminal	Dec DEC; 
+non terminal	DecVar DEC_VAR;
+non terminal	DecFM DEC_FM; 
+non terminal	Campos CAMPOS;
+non terminal	Campo CAMPO;
+non terminal	DescrT DEC_TIPO, DESCR_TIPOp, DESCR_TIPO, DEC_PUNT, DEC_ARRAY, DEC_REG, DEC_OBJ;
+non terminal	CampoObj CAMP_OBJ;
+non terminal	CampI CAMP_I;
+non terminal	DecF DEC_FUN;
+non terminal	DecM DEC_MET; 
+non terminal	Cabecera CABECERA;
+non terminal	Params PARAMS, PARAMSp;
+non terminal	Par PARAM;
+non terminal	Designador DESIGNADOR, DES_ARRAY, DES_REG, DES_PUNT;
+non terminal	E E0, E1, E2, E3, E4;
+non terminal    TipoOp OP0, OP1, OP2, OP3; 
+non terminal	InvF INV_F;
+non terminal	InvM INV_M; 
+non terminal	Exp EXP, EXPp; 
+non terminal	Insts INSTRUCCIONES; 
+non terminal	Inst INST, INST_ASIG, INST_LECT, INST_ESC, INST_MEM, INST_LIB, INST_IF, INST_WHILE, INST_RETURN;
+non terminal	CasosIf CASOS_IF; 
+non terminal	Caso CASO; 
+
+				
+				
+PROGRAMA ::= DECLARACIONES: aDeDecs SEPARADOR_SECCION INSTRUCCIONES: aDeInsts {: RESULT=as.programa(aDeDecs,aDeInsts, parser.row()); :};
+
+DECLARACIONES ::= DECLARACIONESp: aDeDecs {: RESULT=aDeDecs; :}
+				  | {: RESULT=as.declaracionesVacia(parser.row()); :};
+DECLARACIONESp ::= DECLARACIONESp: aDeDecs SEPARADOR_INST DEC: aDeDec {: RESULT=as.declaraciones(aDeDecs, aDeDec, parser.row()); :}
+				   | DEC: aDeDec {: RESULT=as.declaracionesSimple(aDeDec, parser.row()); :};
+DEC ::= DEC_VAR: aDeDecVar {: RESULT=as.decV(aDeDecVar, parser.row()); :}
+		| DEC_TIPO: aDeDecTipo {: RESULT=as.decT(aDeDecTipo, parser.row()); :}
+		| DEC_FM: aDeDecFM {: RESULT=as.decFuncionMetodo(aDeDecFM, parser.row()); :};
+DEC_VAR ::= DESCR_TIPO: aDeDecTipo ID: lex {: RESULT=as.decVariable(aDeDecTipo, lex, parser.row()); :};
+DEC_TIPO ::= TIPO DESCR_TIPO: aDeDescrTipo ID: lex {: RESULT=as.decTipo(aDeDescrTipo,  lex, parser.row()); :};
+DESCR_TIPO ::= DEC_PUNT: aDeDescPunt  {: RESULT=aDeDescPunt; :}
+			   | DESCR_TIPOp: aDeDescrTipop {: RESULT=aDeDescrTipop; :};
+DESCR_TIPOp ::= DEC_ARRAY: aDeDecArray  {: RESULT=aDeDecArray; :}
+				| DEC_REG: aDeDecReg  {: RESULT=aDeDecReg; :}
+				| DEC_OBJ: aDeDecObj  {: RESULT=aDeDecObj; :}
+				| ID: lex  {: RESULT=as.descripcionTipo(lex, parser.row()); :}
+				| INT  {: RESULT=as.declaracionInt(parser.row()); :}
+				| REAL  {: RESULT=as.declaracionReal(parser.row()); :};
+DEC_PUNT ::= POINTER DESCR_TIPO: aDeDescrTipo  {: RESULT=as.declaracionPuntero(aDeDescrTipo, parser.row()); :};
+DEC_ARRAY ::= DESCR_TIPOp: aDeDescrTipo COR_AP ENTERO: lex COR_CIERRE  {: RESULT=as.declaracionArray(aDeDescrTipo, lex, parser.row()); :};
+DEC_REG ::= REC CAMPOS: aDeCampos ENDREC {: RESULT=as.declaracionRegistro(aDeCampos, parser.row()); :};
+CAMPOS ::= CAMPOS: aDeCampos SEPARADOR_INST CAMPO: aDeCampo {: RESULT=as.camposComp(aDeCampos, aDeCampo, parser.row()); :} 
+		   | CAMPO: aDeCampo {: RESULT=as.camposSimple(aDeCampo, parser.row()); :};
+CAMPO ::= DESCR_TIPO: aDeDescrTipo ID: lex {: RESULT=as.campoConst(aDeDescrTipo, lex, parser.row()); :};
+DEC_OBJ ::= OBJECT EXTENDS ID: lex CAMP_OBJ: aDeCampObj ENDOBJECT {: RESULT=as.declaracionObjeto(aDeCampObj, lex, parser.row()); :}
+			| OBJECT CAMP_OBJ: aDeCampObj ENDOBJECT {: RESULT=as.declaracionObjetoSimple(aDeCampObj, parser.row()); :};
+CAMP_OBJ ::= CAMP_OBJ: aDeCampObj SEPARADOR_INST CAMP_I: aDeCampI {: RESULT=as.campoObjeto(aDeCampObj, aDeCampI, parser.row()); :}
+			 | CAMP_I: aDeCampI {: RESULT=as.campoObjetoSimple(aDeCampI, parser.row()); :};
+CAMP_I ::= CAMPO: aDeCampo {: RESULT=as.campICampo(aDeCampo, parser.row()); :}
+		   | DEC_MET: aDeMet {: RESULT=as.campIMetodo(aDeMet, parser.row()); :};
+DEC_FM ::= DEC_FUN: aDeDecFun {: RESULT=as.decFMFun(aDeDecFun, parser.row()); :}
+		   | DEC_MET: aDeDecMet {: RESULT=as.decFMMet(aDeDecMet, parser.row()); :} ;
+DEC_FUN ::= FUN CABECERA: aDeCabecera PROGRAMA: aDeProg END ID: lex {: RESULT=as.decFuncion(aDeCabecera, aDeProg, lex, parser.row()); :};
+DEC_MET ::= METHOD CABECERA: aDeCabecera PROGRAMA: aDeProg END ID: lex {: RESULT=as.decMetodo(aDeCabecera, aDeProg, lex, parser.row()); :};
+CABECERA ::= ID: lex PAR_AP PARAMS: aDeParams PAR_CIERRE RETURNS DESCR_TIPO: aDeDescrTipo {: RESULT=as.cabeceraComp(aDeParams, lex, aDeDescrTipo, parser.row()); :}
+			 | ID: lex PAR_AP PARAMS: aDeParams PAR_CIERRE {: RESULT=as.cabeceraSimple(aDeParams, lex, parser.row()); :};
+PARAMS ::= PARAMSp: aDeParams {: RESULT=aDeParams; :}
+		   | {: RESULT=as.parametrosVacio(parser.row()); :};
+PARAMSp ::= PARAMSp: aDeParams COMA PARAM: aDeParam {: RESULT=as.parametros(aDeParams, aDeParam, parser.row()); :}
+		    | PARAM: aDeParam {: RESULT=as.parametrosSimple(aDeParam, parser.row()); :};
+PARAM ::= DESCR_TIPO: aDeParam ID: lex {: RESULT=as.parametro(aDeParam, lex, parser.row()); :}
+		  | DESCR_TIPO: aDeParam REFERENCIA ID: lex {: RESULT=as.parametroRef(aDeParam, lex, parser.row()); :};
+
+DESIGNADOR ::= DES_ARRAY: aDeDesArray {: RESULT=aDeDesArray; :}
+			   | DES_REG: aDeDesReg {: RESULT=aDeDesReg; :}
+			   | DES_PUNT: aDeDesPunt {: RESULT=aDeDesPunt; :}
+			   | ID: lex {: RESULT=as.designadorID(lex, parser.row()); :}
+			   | THIS {: RESULT=as.designadorThis(parser.row()); :}
+			   | SUPER {: RESULT=as.designadorSuper(parser.row()); :}; 
+DES_ARRAY ::= DESIGNADOR: aDeDes COR_AP E0:aDeE0 COR_CIERRE {: RESULT=as.designadorArray(aDeDes, aDeE0, parser.row()); :};
+DES_REG ::= DESIGNADOR: aDeDes PUNTO ID: lex {: RESULT=as.designadorRegistro(aDeDes, lex, parser.row()); :};
+DES_PUNT ::= DESIGNADOR: aDeDes ACENTO {: RESULT=as.designadorPuntero(aDeDes, parser.row()); :};
+
+E0 ::= E1: aDeE10 OP0: aDeOp E1: aDeE11 {: RESULT=as.mkExp(aDeE10, aDeE11, aDeOp, parser.row()); :}
+	   | E1: aDeE1 {: RESULT=aDeE1; :};
+OP0 ::= MENOR {: RESULT=TipoOp.MENOR; :}
+		| MAYOR {: RESULT=TipoOp.MAYOR; :}
+		| MENOR_IGUAL {: RESULT=TipoOp.MENOR_IGUAL; :}
+		| MAYOR_IGUAL {: RESULT=TipoOp.MAYOR_IGUAL; :}
+		| IGUAL {: RESULT=TipoOp.IGUAL; :}
+		| DISTINTO {: RESULT=TipoOp.DISTINTO; :};
+E1 ::= E1: aDeE1 OP1: aDeOp E2: aDeE2 {: RESULT=as.mkExp(aDeE1, aDeE2, aDeOp, parser.row()); :} 
+	   | E2: aDeE2 {: RESULT=aDeE2; :};
+OP1 ::= OR {: RESULT=TipoOp.OR; :}
+		| SUMA {: RESULT=TipoOp.SUMA; :}
+		| RESTA {: RESULT=TipoOp.RESTA; :};
+E2 ::= E2: aDeE2 OP2: aDeOp E3: aDeE3 {: RESULT=as.mkExp(aDeE2, aDeE3, aDeOp, parser.row()); :}
+	   | E3: aDeE3 {: RESULT=aDeE3; :};
+OP2 ::= MULT {: RESULT=TipoOp.MUL; :}
+		| DIV {: RESULT=TipoOp.DIV; :}
+		| MODULO {: RESULT=TipoOp.MOD; :}
+		| AND {: RESULT=TipoOp.AND; :};
+E3 ::= OP3: aDeOp3 E3: aDeE3 {: RESULT=as.mkExp(aDeE3, null, aDeOp3, parser.row()); :}
+	   | CAST_INT E4: aDeE4 {: RESULT=as.mkExp(aDeE4, null, TipoOp.CAST_INT, parser.row()); :}
+	   | CAST_REAL E4: aDeE4 {: RESULT=as.mkExp(aDeE4, null, TipoOp.CAST_REAL, parser.row()); :}
+	   | E4: aDeE4 {: RESULT=aDeE4; :};
+OP3 ::= NOT {: RESULT=TipoOp.NOT; :}
+		| RESTA {: RESULT=TipoOp.MENOS; :};
+E4 ::= NULL {: RESULT=as.nullM(parser.row()); :}
+	   | ENTERO: lex {: RESULT=as.entero(lex, parser.row()); :}
+	   | NUM_REAL: lex {: RESULT=as.real(lex, parser.row()); :}
+	   | DESIGNADOR: aDeDes {: RESULT=as.designadorE(aDeDes, parser.row()); :}
+	   | INV_F: aDeInvF {: RESULT=as.expresionFuncion(aDeInvF, parser.row()); :}
+	   | INV_M: aDeInvM  {: RESULT=as.expresionMetodo(aDeInvM, parser.row()); :}
+	   | PAR_AP E0: aDeE0 PAR_CIERRE {: RESULT=aDeE0; :};
+INV_F ::= ID: lex PAR_AP EXP: aDeExp PAR_CIERRE {: RESULT=as.invocacionF(lex,aDeExp, parser.row()); :};
+INV_M ::= DESIGNADOR: aDeDesign PUNTO ID: lex PAR_AP EXP: aDeExp PAR_CIERRE {: RESULT=as.invocacionM(aDeDesign,lex,aDeExp, parser.row()); :};
+EXP ::= EXPp: aDeExp {: RESULT=aDeExp; :}
+		| {: RESULT=as.expVacia(parser.row()); :};
+EXPp ::= E0: aDeE0 {: RESULT=as.expSimple(aDeE0, parser.row()); :} 
+		 | EXPp: aDeExp COMA E0: aDeE0 {: RESULT=as.expComp(aDeExp, aDeE0, parser.row()); :};
+
+INSTRUCCIONES ::= INSTRUCCIONES: aDeInsts SEPARADOR_INST INST: aDeInst {: RESULT=as.instrucciones(aDeInsts, aDeInst, parser.row()); :}
+				  | INST: aDeInst {: RESULT=as.instruccion(aDeInst, parser.row()); :};
+INST ::= INST_ASIG: aDeInst {: RESULT=aDeInst; :}
+		 | INST_LECT: aDeInst {: RESULT=aDeInst; :}
+		 | INST_ESC: aDeInst {: RESULT=aDeInst; :}
+		 | INST_MEM: aDeInst {: RESULT=aDeInst; :}
+		 | INST_LIB: aDeInst {: RESULT=aDeInst; :}
+		 | INST_IF: aDeInst {: RESULT=aDeInst; :}
+		 | INST_WHILE: aDeInst {: RESULT=aDeInst; :}
+		 | INST_RETURN: aDeInst {: RESULT=aDeInst; :}
+		 | INV_F: aDeInvF {: RESULT=as.instFuncion(aDeInvF, parser.row()); :}
+		 | INV_M: aDeInvM {: RESULT=as.instMetodo(aDeInvM, parser.row()); :};
+INST_ASIG ::= DESIGNADOR: aDeDesig ASIGNACION E0: aDeE0 {: RESULT=as.asignacion(aDeDesig, aDeE0, parser.row()); :};
+INST_LECT ::= IN DESIGNADOR: aDeDesig {: RESULT=as.lectura(aDeDesig, parser.row()); :};
+INST_ESC ::= OUT E0: aDeE0 {: RESULT=as.escritura(aDeE0, parser.row()); :};
+INST_MEM ::= ALLOC DESIGNADOR: aDeDes {: RESULT=as.reservarMemoria(aDeDes, parser.row()); :};
+INST_LIB ::= FREE DESIGNADOR: aDeDes {: RESULT=as.liberarMemoria(aDeDes, parser.row()); :};
+INST_IF ::= IF CASOS_IF: aDeCasos ELSE INSTRUCCIONES: aDeInsts ENDIF {: RESULT=as.ifElse(aDeCasos, aDeInsts, parser.row()); :}
+			| IF CASOS_IF: aDeCasos ENDIF {: RESULT=as.ifSimple(aDeCasos, parser.row()); :};
+CASOS_IF ::= CASOS_IF: aDeCasos ELSIF CASO: aDeCaso {: RESULT=as.casosIfComp(aDeCasos,aDeCaso, parser.row()); :}
+			 | CASO: aDeCaso  {: RESULT=as.casosIfSimple(aDeCaso, parser.row()); :};
+CASO ::= E0: aDeE0 THEN INSTRUCCIONES: aDeInsts {: RESULT=as.casoSimple(aDeE0, aDeInsts, parser.row()); :};
+INST_WHILE ::= WHILE E0: aDeE0 DO INSTRUCCIONES:aDeInsts ENDWHILE {: RESULT=as.instWhile(aDeE0, aDeInsts, parser.row()); :};
+INST_RETURN ::= RETURN E0: aDeE0 {: RESULT=as.instReturn(aDeE0, parser.row()); :};
